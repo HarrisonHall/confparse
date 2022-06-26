@@ -7,7 +7,7 @@ goals.
 
 ## Interface
 Take directly from [confparse.h](confparse.h).
-```
+```c
 struct confparse_config;  // Config context
 struct confparse_namespace;  // Namespace subtree
 struct confparse_value;  // Key-value pair
@@ -38,7 +38,7 @@ const char *confparse_get_string(void *type, const char *key);
 ## Example Usage
 Check out [examples/test.c](examples/test.c). Here's an example.
 
-```
+```c
 struct confparse_config *conf = confparse_parse_file("example.conf");
 
 bool myflag = confparse_get_bool(conf, "mysection.myflag");
