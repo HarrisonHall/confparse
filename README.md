@@ -1,24 +1,54 @@
 # ConfParse
 Straightforward header-only ini/conf file parser.
 
+The goal was to be concise and header-only while maintaining readability
+and a simple interface. PRs welcome if they fix bugs or align with those
+goals.
+
 ## Interface
+Take directly from [confparse.h](confparse.h).
 ```
-#include "confparse.h"
+struct confparse_config;  // Config context
+struct confparse_namespace;  // Namespace subtree
+struct confparse_value;  // Key-value pair
 
+// Parse config context from filename
+struct confparse_config *confparse_parse_file(const char *filename);
+// Parse config context from string
+struct confparse_config *confparse_parse_string(const char *data);
+// Free confparse-allocated structures
+void confparse_free(void *type);
 
-struct confparse_config *config = confparse_parse_file("myfile.conf");
+// Check if key exists in config/namespace
+bool confparse_has_key(void *type, const char *key);
 
-bool mybool = false;
-if (confparse_has_key(config, "section.key")) {
-  myflag = confparse_get_bool(config, "section.key");
+// Get sub-namespace from config/namespace
+struct confparse_namespace *confparse_get_namespace(void *type, const char *key);
+
+// Get bool from key in config/namespace
+bool confparse_get_bool(void *type, const char *key);
+// Get int from key in config/namespace
+int64_t confparse_get_int(void *type, const char *key);
+// Get float from key in config/namespace
+double confparse_get_float(void *type, const char *key);
+// Get string from key in config/namespace
+const char *confparse_get_string(void *type, const char *key);
+```
+
+## Example Usage
+Check out [examples/test.c](examples/test.c). Here's an example.
+
+```
+struct confparse_config *conf = confparse_parse_file("example.conf");
+
+bool myflag = confparse_get_bool(conf, "mysection.myflag");
+
+if (confparse_has_key(conf, "mysection.mysubsection")) {
+  struct confparse_namespace *ns = confparse_get_namespace(conf, "mysection.mysubsection");
+  int64_t myint = confparse_get_int(ns, "myint");
+  double myfloat = confparse_get_float(ns, "myfloat");
+  char *mystring = confparse_get_string(ns, "mystring");
 }
 
-
-struct confparse_namespace *namespace = confparse_get_namespace(config, "section");
-if (myflag && namespace) {
-  bool myflag2 = confparse_get_bool(namespace, "key");
-  int64_t myint = confparse_get_int(namespace, "someval");
-  double myfloat = confparse_get_float(namespace, "someval2");
-  char *mystring = confparse_get_string(namespace, "someval3");
-}
+confparse_free(conf);
 ```

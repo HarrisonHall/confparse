@@ -21,6 +21,8 @@ struct confparse_value;  // Key-value pair
 struct confparse_config *confparse_parse_file(const char *filename);
 // Parse config context from string
 struct confparse_config *confparse_parse_string(const char *data);
+// Free confparse-allocated structures
+void confparse_free(void *type);
 
 // Check if key exists in config/namespace
 bool confparse_has_key(void *type, const char *key);
@@ -128,6 +130,25 @@ struct confparse_config *confparse_parse_string(const char *data) {
   return config;
 }
 
+void confparse_free(void *type) {
+  if (*(enum CONFPARSE_TYPE *)type == CONFIG) {
+    struct confparse_config *config = (struct confparse_config *)type;
+    for (size_t i = 0; i < config->num_entries; i++) {
+      confparse_free(config->values[i]);
+    }
+    free(config->values);
+    free(config);
+  } else if (*(enum CONFPARSE_TYPE *)type == NAMESPACE) {
+    struct confparse_namespace *namespace = (struct confparse_namespace *)type;
+    free(namespace->prepended_key);
+    free(namespace);
+  } else if (*(enum CONFPARSE_TYPE *)type == VALUE) {
+    struct confparse_value *value = (struct confparse_value *)type;
+    free(value->key);
+    free(value->data);
+  }
+}
+
 bool confparse_has_key(void *type, const char *key) {
   struct confparse_config *config;
   bool found = false;
@@ -213,8 +234,6 @@ size_t cp_num_lines_in_config(const char *file) {
 #define CP_REGEX_WHITESPACE_OPT "[ \\t]*"
 #define CP_REGEX_TEXT "[a-zA-Z0-9]+"
 #define CP_REGEX_TEXT_NAMESPACE "[a-zA-Z0-9\\.]+"
-//#define CP_REGEX_QUOTED_STRING "((\\\")|[^\"(\\\")])+"
-//#define CP_REGEX_QUOTED_STRING "\\\"?.*\\\"?"
 #define CP_REGEX_COMMENT_OPT "[(\\;|\\#).*]*"
 #define CP_REGEX_NEWLINE_OPT "(\\r\\n|\\n)*"
 #define NAMESPACE_REGEX_STR \
@@ -226,7 +245,7 @@ size_t cp_num_lines_in_config(const char *file) {
   "^" CP_REGEX_WHITESPACE_OPT                                           \
   "(" CP_REGEX_TEXT ")"                                                 \
   CP_REGEX_WHITESPACE_OPT "\\=" CP_REGEX_WHITESPACE_OPT                 \
-  "\\\"?([^\n\\\"]*)\\\"?"                                       \
+  "\\\"?([^\n\\\"]*)\\\"?"                                              \
   CP_REGEX_WHITESPACE_OPT CP_REGEX_COMMENT_OPT CP_REGEX_ANY_OPT
 
 bool cp_line_matches_namespace(const char *line) {
@@ -302,11 +321,9 @@ void *cp_find_value(void *type, const char *key) {
   struct confparse_value *value = NULL;
   for (size_t i = 0; i < config->num_entries; i++) {
     if (strcmp(total_key, config->values[i]->key) == 0) {
-      printf("Matches: %s-%s\n", total_key, config->values[i]->key);
       value = config->values[i];
       break;
     }
-      
   }
   if (key != total_key) free((void *)total_key);
   return value;
