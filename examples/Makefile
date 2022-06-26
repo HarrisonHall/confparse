@@ -1,10 +1,10 @@
 
 
 
-default: test
+default: general_test
 
-test: test.c ../confparse.h
-	gcc test.c -o test -DDEBUG
+general_test: general_test.c ../confparse.h
+	gcc general_test.c -o test -DDEBUG
 	./test
 
 clean:

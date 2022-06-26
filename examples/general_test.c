@@ -5,8 +5,7 @@
 
 
 int main() {
-  char filename[] = "example.conf";
-  struct confparse_config *conf = confparse_parse_file(filename);
+  struct confparse_config *conf = confparse_parse_file("example.conf");
 
   printf("%s exists: %B\n", "example", confparse_has_key(conf, "example"));
   printf("%s exists: %B\n", "example.sub", confparse_has_key(conf, "example.sub"));
@@ -28,6 +27,6 @@ int main() {
   printf("\n\nDEBUG\n");
   cp_debug_config(conf);
 #endif
-  
-  free(conf);
+
+  confparse_free(conf);
 }
