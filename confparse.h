@@ -1,7 +1,9 @@
 // confparse.h
 
+#include <errno.h>
 #include <inttypes.h>
 #include <regex.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -39,7 +41,6 @@ double confparse_get_float(void *type, const char *key);
 // Get string from key in config/namespace
 const char *confparse_get_string(void *type, const char *key);
 
-
 // Implementation
 
 enum CONFPARSE_TYPE {CONFIG = 0, NAMESPACE, VALUE};
@@ -62,6 +63,10 @@ struct confparse_value {
   char *data;
 };
 
+enum CONFPARSE_ERROR { NO_ERROR, BAD_MALLOC, NOT_A_FILE };
+int cp_errno = NO_ERROR;
+const char *cp_errmsg = "";
+
 // Combine namespace with subkey
 char *cp_total_key(const char *namespace, const char *key);
 // Check if child_namespace is actually a child namespace of parent_namespace
@@ -80,15 +85,24 @@ char *cp_parse_key(const char *line);
 char *cp_parse_value(const char *line);
 // Get value struct from config
 void *cp_find_value(void *type, const char *key);
+// Set error and free variables, returns NULL
+void *cp_error_out(enum CONFPARSE_ERROR e, const char *message, ...);
+// Clear error message and string
+void cp_error_clear();
 
 
 struct confparse_config *confparse_parse_file(const char *filename) {
+  cp_error_clear();
   if (access(filename, F_OK) == 0) {
     FILE *filep = fopen(filename, "r");
     fseek(filep, 0, SEEK_END);
     size_t fsize = ftell(filep);
     rewind(filep);
     char *data = malloc(fsize + 1);
+    if (!data) {
+      fclose(filep);
+      return cp_error_out(BAD_MALLOC, "Unable to malloc for configuration file");
+    }
     fread(data, fsize, 1, filep);
     data[fsize] = '\0';
     fclose(filep);
@@ -96,14 +110,18 @@ struct confparse_config *confparse_parse_file(const char *filename) {
     free(data);
     return config;
   }
-  return NULL;
+  return cp_error_out(NOT_A_FILE, "File does not exist");
 }
 
 struct confparse_config *confparse_parse_string(const char *data) {
+  cp_error_clear();
   struct confparse_config *config = malloc(sizeof(struct confparse_config));
+  if (!config) return cp_error_out(BAD_MALLOC, "Unable to malloc for config struct");
   size_t table_size = cp_num_lines_in_config(data);
   size_t index = 0;
   *config = (struct confparse_config) { CONFIG, table_size, calloc(table_size, sizeof(struct confparse_value)) };
+  if (!config->values) return cp_error_out(BAD_MALLOC, "Unable to malloc config table", config);
+  memset(config->values, 0, table_size * sizeof(struct confparse_value));
   const char *current_namespace = "";
   const char *cursor = data;
 
@@ -111,12 +129,14 @@ struct confparse_config *confparse_parse_string(const char *data) {
     if (cp_line_matches_namespace(cursor)) {
       char *new_namespace = cp_parse_namespace(cursor);
       struct confparse_namespace *ns = malloc(sizeof(struct confparse_namespace));
+      if (!ns) return cp_error_out(BAD_MALLOC, "Unable to malloc namespace", config);
       *ns = (struct confparse_namespace) { NAMESPACE, new_namespace, config };
       config->values[index] = (struct confparse_value *)ns;
       index++;
       current_namespace = ns->prepended_key;
     } else if (cp_line_matches_key_value(cursor)) {
       struct confparse_value *v = malloc(sizeof(struct confparse_value));
+      if (!v) return cp_error_out(BAD_MALLOC, "Unable to malloc value", config);
       char *key = cp_parse_key(cursor);
       char *value = cp_parse_value(cursor);
       *v = (struct confparse_value) { VALUE, cp_total_key(current_namespace, key), value };
@@ -131,25 +151,27 @@ struct confparse_config *confparse_parse_string(const char *data) {
 }
 
 void confparse_free(void *type) {
+  cp_error_clear();
+  if (type == NULL) return;
   if (*(enum CONFPARSE_TYPE *)type == CONFIG) {
     struct confparse_config *config = (struct confparse_config *)type;
     for (size_t i = 0; i < config->num_entries; i++) {
       confparse_free(config->values[i]);
     }
     free(config->values);
-    free(config);
   } else if (*(enum CONFPARSE_TYPE *)type == NAMESPACE) {
     struct confparse_namespace *namespace = (struct confparse_namespace *)type;
     free(namespace->prepended_key);
-    free(namespace);
   } else if (*(enum CONFPARSE_TYPE *)type == VALUE) {
     struct confparse_value *value = (struct confparse_value *)type;
     free(value->key);
     free(value->data);
   }
+  free(type);
 }
 
 bool confparse_has_key(void *type, const char *key) {
+  cp_error_clear();
   struct confparse_config *config;
   bool found = false;
   if (*(enum CONFPARSE_TYPE *)type == CONFIG) {
@@ -170,6 +192,7 @@ bool confparse_has_key(void *type, const char *key) {
 }
 
 struct confparse_namespace *confparse_get_namespace(void *type, const char *key) {
+  cp_error_clear();
   struct confparse_namespace *namespace = (struct confparse_namespace *)cp_find_value(type, key);
   if (namespace == NULL) return NULL;
   if (namespace->type != NAMESPACE) return NULL;
@@ -177,12 +200,14 @@ struct confparse_namespace *confparse_get_namespace(void *type, const char *key)
 }
 
 bool confparse_get_bool(void *type, const char *key) {
+  cp_error_clear();
   struct confparse_value *raw_value = (struct confparse_value*)cp_find_value(type, key);
   if (raw_value == NULL) return false;
   return (strcmp("true", raw_value->data) == 0);
 }
 
 int64_t confparse_get_int(void *type, const char *key) {
+  cp_error_clear();
   struct confparse_value *raw_value = (struct confparse_value*)cp_find_value(type, key);
   if (raw_value == NULL) return 0;
   int64_t value = 0;
@@ -191,6 +216,7 @@ int64_t confparse_get_int(void *type, const char *key) {
 }
 
 double confparse_get_float(void *type, const char *key) {
+  cp_error_clear();
   struct confparse_value *raw_value = (struct confparse_value*)cp_find_value(type, key);
   if (raw_value == NULL) return 0;
   double value = 0.0;
@@ -199,6 +225,7 @@ double confparse_get_float(void *type, const char *key) {
 }
 
 const char *confparse_get_string(void *type, const char *key) {
+  cp_error_clear();
   struct confparse_value *raw_value = (struct confparse_value*)cp_find_value(type, key);
   if (raw_value == NULL) return NULL;
   return (const char *)raw_value->data;
@@ -207,6 +234,7 @@ const char *confparse_get_string(void *type, const char *key) {
 char *cp_total_key(const char *namespace, const char *key) {
   int bufsize = strlen(namespace) + strlen(key) + 1 + 1;
   char *total_key = malloc(bufsize);
+  if (!total_key) return cp_error_out(BAD_MALLOC, "Unable to alloc total_key");
   memset(total_key, 0, bufsize);
   strncat(total_key, namespace, bufsize - 1);
   strcat(total_key, ".");
@@ -275,6 +303,7 @@ char *cp_parse_namespace(const char *line) {
   if (regexec(&reegex, line, 2, pmatch, 0) == 0) {
     size_t len = pmatch[1].rm_eo - pmatch[1].rm_so;
     char *match = malloc(len);
+    if (!match) return cp_error_out(BAD_MALLOC, "Unable to alloc namespace key");
     strncpy(match, line + pmatch[1].rm_so, len);
     match[len] = '\0';
     return match;
@@ -289,6 +318,7 @@ char *cp_parse_key(const char *line) {
   if (regexec(&reegex, line, 3, pmatch, 0) == 0) {
     size_t len = pmatch[1].rm_eo - pmatch[1].rm_so;
     char *match = malloc(len);
+    if (!match) return cp_error_out(BAD_MALLOC, "Unable to alloc value key");
     strncpy(match, line + pmatch[1].rm_so, len);
     match[len] = '\0';
     return match;
@@ -303,6 +333,7 @@ char *cp_parse_value(const char *line) {
   if (regexec(&reegex, line, 3, pmatch, 0) == 0) {
     size_t len = pmatch[2].rm_eo - pmatch[2].rm_so;
     char *match = malloc(len);
+    if (!match) return cp_error_out(BAD_MALLOC, "Unable to alloc value value");
     strncpy(match, line + pmatch[2].rm_so, len);
     match[len] = '\0';
     return match;
@@ -329,6 +360,25 @@ void *cp_find_value(void *type, const char *key) {
   return value;
 }
 
+void *cp_error_out(enum CONFPARSE_ERROR e, const char *message, ...) {
+  va_list argp;
+  va_start(argp, message);
+  void *arg = va_arg(argp, void *);
+  while (arg != NULL) {
+    printf("Freeing %p\n", arg);
+    confparse_free(arg);
+  }
+  va_end(argp);
+  cp_errno = e;
+  cp_errmsg = message;
+  return NULL;
+}
+
+void cp_error_clear() {
+  cp_errno = 0;
+  cp_errmsg = "";
+}
+
 #ifdef DEBUG
 void cp_debug_config(struct confparse_config *config) {
   printf("CONFIG | Correct config: %B (%d)\n", config->type == CONFIG, (int)config->type);
@@ -345,4 +395,4 @@ void cp_debug_config(struct confparse_config *config) {
     }
   }
 }
-#endif
+ #endif

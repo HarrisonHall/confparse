@@ -52,3 +52,9 @@ if (confparse_has_key(conf, "mysection.mysubsection")) {
 
 confparse_free(conf);
 ```
+
+## Misc.
+There is also a basic error system implemented. If something goes wrong when
+generating the original config struct, NULL will be returned. If something goes
+wrong during config population or interface usage, `cp_errno` and `cp_errmsg` are
+set. Note: these are reset during each interface call. 
