@@ -17,7 +17,7 @@ int main() {
   printf("other.mystring %s\n", confparse_get_string(conf, "other.mystring"));
   printf("%f\n", confparse_get_float(conf, "other.mybool"));
 
-  struct confparse_namespace *example = confparse_get_namespace(conf, "example");
+  struct confparse_subsection *example = confparse_get_subsection(conf, "example");
   printf("%p\n", example);
   printf("passed %d\n", example->type);
   printf("example.sub.key: %s\n", confparse_get_string(example, "key"));

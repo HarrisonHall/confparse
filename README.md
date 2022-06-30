@@ -9,7 +9,7 @@ goals.
 Take directly from [confparse.h](confparse.h).
 ```c
 struct confparse_config;  // Config context
-struct confparse_namespace;  // Namespace subtree
+struct confparse_subsection;  // Subsection subtree
 struct confparse_value;  // Key-value pair
 
 // Parse config context from filename
@@ -19,19 +19,19 @@ struct confparse_config *confparse_parse_string(const char *data);
 // Free confparse-allocated structures
 void confparse_free(void *type);
 
-// Check if key exists in config/namespace
+// Check if key exists in config/subsection
 bool confparse_has_key(void *type, const char *key);
 
-// Get sub-namespace from config/namespace
-struct confparse_namespace *confparse_get_namespace(void *type, const char *key);
+// Get sub-subsection from config/subsection
+struct confparse_subsection *confparse_get_subsection(void *type, const char *key);
 
-// Get bool from key in config/namespace
+// Get bool from key in config/subsection
 bool confparse_get_bool(void *type, const char *key);
-// Get int from key in config/namespace
+// Get int from key in config/subsection
 int64_t confparse_get_int(void *type, const char *key);
-// Get float from key in config/namespace
+// Get float from key in config/subsection
 double confparse_get_float(void *type, const char *key);
-// Get string from key in config/namespace
+// Get string from key in config/subsection
 const char *confparse_get_string(void *type, const char *key);
 ```
 
@@ -44,7 +44,7 @@ struct confparse_config *conf = confparse_parse_file("example.conf");
 bool myflag = confparse_get_bool(conf, "mysection.myflag");
 
 if (confparse_has_key(conf, "mysection.mysubsection")) {
-  struct confparse_namespace *ns = confparse_get_namespace(conf, "mysection.mysubsection");
+  struct confparse_subsection *ns = confparse_get_subsection(conf, "mysection.mysubsection");
   int64_t myint = confparse_get_int(ns, "myint");
   double myfloat = confparse_get_float(ns, "myfloat");
   char *mystring = confparse_get_string(ns, "mystring");
